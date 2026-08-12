@@ -1,8 +1,8 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.GSterlingPress/recover",
-  "title": "RECOVER — Safe Next-Step Decisions After Machine Failures",
-  "description": "Deterministic next-step decisions after failed API, MCP, automation, or AI-agent actions.",
+  "title": "RECOVER — Decide Safely After a Failed Machine Action",
+  "description": "After a machine action fails, decide the safest next step before retrying, especially with side effects.",
   "version": "0.1.2",
   "websiteUrl": "https://github.com/GSterlingPress/recover-api",
   "repository": {"url": "https://github.com/GSterlingPress/recover-api", "source": "github"},
