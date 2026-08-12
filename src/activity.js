@@ -1,0 +1,22 @@
+import crypto from 'node:crypto';
+import fs from 'node:fs';
+import path from 'node:path';
+const MAX_EVENTS=5000;
+const DISCOVERY=new Set(['initialize','notifications/initialized','tools/list','ping','resources/list','resources/templates/list','prompts/list']);
+const BOT_RE=/(github-actions|curl|railway|healthcheck|recover-registry-check)/i;
+function dataDir(){return process.env.RECOVER_DATA_DIR??(process.env.RAILWAY_ENVIRONMENT?'/data':path.resolve('.recover-data'))}
+function hash(v){return crypto.createHash('sha256').update(String(v||'unknown')).digest('hex').slice(0,12)}
+function atomic(file,data){fs.mkdirSync(path.dirname(file),{recursive:true});const t=`${file}.${process.pid}.tmp`;fs.writeFileSync(t,JSON.stringify(data),{mode:0o600});fs.renameSync(t,file)}
+function internal(req){return String(req.headers['x-recover-internal']||'')==='1'||BOT_RE.test(String(req.headers['user-agent']||''))}
+function source(req){const explicit=String(req.headers['x-recover-source']||'').trim();if(explicit)return explicit.slice(0,64);return /modelcontextprotocol|mcp/i.test(String(req.headers['user-agent']||''))?'mcp-client':'direct'}
+function isDiscovery(e){return e.kind==='mcp'&&DISCOVERY.has(e.route)}
+function isReal(e){return e.external&&(e.kind==='recover'||(e.kind==='mcp'&&e.route==='tools/call:recover_decide'))}
+export class ActivityStore{
+ constructor({dir=null}={}){this.dir=dir??dataDir();this.file=path.join(this.dir,'activity.json');this.realFile=path.join(this.dir,'real-use.json');this.persistent=Boolean(dir||process.env.RECOVER_DATA_DIR||process.env.RAILWAY_ENVIRONMENT);this.events=[];this.real=[];this.firstSeen=new Map();this.discoverySeen=new Map();if(this.persistent)this.load()}
+ load(){try{const d=JSON.parse(fs.readFileSync(this.file,'utf8'));this.events=d.events||[];this.firstSeen=new Map(d.firstSeen||[]);this.discoverySeen=new Map(d.discoverySeen||[])}catch{}try{const d=JSON.parse(fs.readFileSync(this.realFile,'utf8'));this.real=d.events||[]}catch{}this.reconstruct()}
+ reconstruct(){const ids=new Set(this.real.map(e=>e.id));let changed=false;for(const e of this.events){if(isReal(e)&&!ids.has(e.id)){this.real.push(e);ids.add(e.id);changed=true}}this.real.sort((a,b)=>a.at.localeCompare(b.at));if(changed)this.persistReal()}
+ persist(){if(this.persistent)atomic(this.file,{events:this.events,firstSeen:[...this.firstSeen],discoverySeen:[...this.discoverySeen]})}
+ persistReal(){if(this.persistent)atomic(this.realFile,{version:1,events:this.real})}
+ record(req,{kind,route=null,decision=null,status=200}={}){const ip=String(req.headers['x-forwarded-for']||'').split(',')[0].trim()||req.socket?.remoteAddress||'';const caller=hash([ip,req.headers['user-agent']||'',req.headers['accept-language']||''].join('|'));const seen=this.firstSeen.has(caller);if(!seen)this.firstSeen.set(caller,Date.now());const event={id:crypto.randomUUID(),at:new Date().toISOString(),kind,route,decision,status,source:source(req),channel:kind==='mcp'?'mcp':'rest',caller,callerState:seen?'returning':'new',external:!internal(req)};event.discovery=isDiscovery(event);if(event.discovery&&!this.discoverySeen.has(caller))this.discoverySeen.set(caller,Date.now());event.realUse=isReal(event);event.convertedFromDiscovery=event.realUse&&this.discoverySeen.has(caller);this.events.unshift(event);if(this.events.length>MAX_EVENTS)this.events.length=MAX_EVENTS;if(event.realUse){this.real.push(event);this.persistReal()}this.persist();return event}
+ snapshot(){const external=this.events.filter(e=>e.external);const real=this.real.filter(e=>e.external);const convertedUnique=[];const seen=new Set();for(const e of real){if(e.convertedFromDiscovery&&!seen.has(e.caller)){seen.add(e.caller);convertedUnique.push(e)}}const milestones=Array.from({length:10},(_,i)=>convertedUnique[i]?{number:i+1,achieved:true,...convertedUnique[i]}:{number:i+1,achieved:false});return {service:'RECOVER',generatedAt:new Date().toISOString(),external:{calls:external.length,uniqueCallers:new Set(external.map(e=>e.caller)).size,mcpCalls:external.filter(e=>e.kind==='mcp').length,recoverCalls:external.filter(e=>e.kind==='recover').length},realUse:{allTimeCalls:real.length,allTimeCallers:new Set(real.map(e=>e.caller)).size,allTimeConvertedRealWorldCallers:convertedUnique.length},realWorldConversionMilestones:milestones,persistence:{enabled:this.persistent,realUseFile:this.persistent?this.realFile:null,realUseCapacity:'unbounded'},privacy:{rawIpStored:false,requestPayloadStored:false},realFeed:[...real].reverse().slice(0,500),feed:external.slice(0,100)}}
+}

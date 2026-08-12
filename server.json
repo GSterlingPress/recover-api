@@ -1,0 +1,1 @@
+{"$schema":"https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json","name":"io.github.gsterlingpress/recover","description":"Deterministic recovery decisions after failed API/tool/agent actions.","version":"0.1.0","packages":[],"remotes":[{"type":"streamable-http","url":"https://YOUR-RECOVER-DOMAIN/mcp"}]}

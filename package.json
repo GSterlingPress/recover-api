@@ -1,0 +1,9 @@
+{
+  "name":"recover-api",
+  "version":"0.1.0",
+  "private":true,
+  "type":"module",
+  "description":"Deterministic recovery decisions for failed AI-agent and API actions.",
+  "engines":{"node":">=20"},
+  "scripts":{"start":"node src/server.js","test":"node --test test/*.test.js"}
+}
