@@ -1,1 +1,10 @@
-{"$schema":"https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json","name":"io.github.gsterlingpress/recover","description":"Deterministic recovery decisions after failed API/tool/agent actions.","version":"0.1.0","packages":[],"remotes":[{"type":"streamable-http","url":"https://YOUR-RECOVER-DOMAIN/mcp"}]}
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.GSterlingPress/recover",
+  "title": "RECOVER — Safe Next-Step Decisions After Machine Failures",
+  "description": "After an API, MCP tool, automation, or AI-agent action fails, RECOVER returns a deterministic next-safe-action decision: RETRY_NOW, WAIT, REPAIR_REQUEST, VERIFY_FIRST, ESCALATE, or ABORT.",
+  "version": "0.1.2",
+  "websiteUrl": "https://github.com/GSterlingPress/recover-api",
+  "repository": {"url": "https://github.com/GSterlingPress/recover-api", "source": "github"},
+  "remotes": [{"type": "streamable-http", "url": "https://recover-api-production-bbba.up.railway.app/mcp"}]
+}
