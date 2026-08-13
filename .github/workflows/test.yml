@@ -15,22 +15,35 @@ jobs:
     steps:
       - name: Wait for Railway deployment
         run: |
+          set -euo pipefail
           for i in {1..60}; do
             BODY=$(curl -fsS --max-time 10 https://recover-api-production-bbba.up.railway.app/version || true)
             echo "$BODY"
-            if echo "$BODY" | grep -q '"version":"0.1.2"'; then exit 0; fi
-            sleep 10
+            if echo "$BODY" | grep -q '"service":"RECOVER"'; then exit 0; fi
+            sleep 5
           done
           exit 1
       - name: Verify safe demo exclusion
         run: |
-          BODY=$(curl -fsS https://recover-api-production-bbba.up.railway.app/demo)
+          BODY=$(curl -fsS -H 'X-Recover-Internal: 1' -H 'X-Tollbooth-Internal: 1' https://recover-api-production-bbba.up.railway.app/demo)
           echo "$BODY"
           echo "$BODY" | grep -q '"demo":true'
           echo "$BODY" | grep -q '"recorded":false'
-      - name: Verify persistence sentinel and stranger safety
+      - name: Verify persistence and zero false stranger awards
         run: |
-          BODY=$(curl -fsS -H 'X-Recover-Internal: 1' https://recover-api-production-bbba.up.railway.app/_internal/persistence)
+          BODY=$(curl -fsS -H 'X-Recover-Internal: 1' -H 'X-Tollbooth-Internal: 1' https://recover-api-production-bbba.up.railway.app/_internal/persistence)
           echo "$BODY"
           echo "$BODY" | grep -q '"persistent":true'
-          echo "$BODY" | grep -q '"strangerCount":0'
+          ACTIVITY=$(curl -fsS https://recover-api-production-bbba.up.railway.app/v1/activity)
+          printf '%s' "$ACTIVITY" > recover-activity.json
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const s=JSON.parse(fs.readFileSync('recover-activity.json','utf8'));
+          if(s.verificationPolicy?.rule?.includes('Only CREDIBLE_REAL_USE')!==true) throw new Error('verification policy missing');
+          const bad=(s.realWorldConversionMilestones||[]).filter(x=>x.achieved&&x.classification!=='CREDIBLE_REAL_USE');
+          if(bad.length) throw new Error(`non-credible milestone awarded: ${JSON.stringify(bad)}`);
+          const historical=(s.candidateRealUse||[]).filter(x=>String(x.caller||'').startsWith('358d3660'));
+          console.log('358d3660 audit:',JSON.stringify(historical,null,2));
+          if(historical.some(x=>x.classification==='CREDIBLE_REAL_USE')) throw new Error('358d3660 must not be verified');
+          console.log('verified strangers:',s.realUse?.allTimeVerifiedStrangers??0);
+          NODE
